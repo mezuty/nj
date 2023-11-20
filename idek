@@ -1,0 +1,263 @@
+local player = game.Players.LocalPlayer
+local userInputService = game:GetService("UserInputService")
+local mouse = player:GetMouse()
+local runService = game:GetService("RunService")
+
+-- Settings
+local bind = Enum.KeyCode.V -- has to be lowercase
+local bind2 = Enum.KeyCode.LeftBracket
+
+-- Flags for keys
+local keyBindPressed = false
+local keyBind2Pressed = false
+
+-- Counter variables
+local keyBindCounter = 0
+local keyBind2Counter = 0
+
+-- Function to handle firing with CFrame at mouse position
+local function fireKeyBind()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(mouse.Hit.p)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Index"] = 1,
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Function to handle firing with specific CFrame
+local function fireKeyBind2()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(-414.4881591796875, 1, -17.435283660888672)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Spell"] = "Reave",
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Key press events
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = true
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = true
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = false
+        keyBindCounter = 0
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = false
+        keyBind2Counter = 0
+    end
+end)
+
+-- Heartbeat connection to execute actions
+runService.Heartbeat:Connect(function()
+    if keyBindPressed then
+        keyBindCounter = keyBindCounter + 9
+        if keyBindCounter % 2 == 0 then
+            fireKeyBind()
+        end
+    end
+
+    if keyBind2Pressed then
+        keyBind2Counter = keyBind2Counter + 9
+        if keyBind2Counter % 2 == 0 then
+            fireKeyBind2()
+        end
+    end
+end)
+--------------------
+
+local player = game.Players.LocalPlayer
+local userInputService = game:GetService("UserInputService")
+local mouse = player:GetMouse()
+local runService = game:GetService("RunService")
+
+-- Settings
+local bind = Enum.KeyCode.LeftBracket -- has to be lowercase
+local bind2 = Enum.KeyCode.LeftBracket
+
+-- Flags for keys
+local keyBindPressed = false
+local keyBind2Pressed = false
+
+-- Counter variables
+local keyBindCounter = 0
+local keyBind2Counter = 0
+
+-- Function to handle firing with CFrame at mouse position
+local function fireKeyBind()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(mouse.Hit.p)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Index"] = 4,
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Function to handle firing with specific CFrame
+local function fireKeyBind2()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(-414.4881591796875, 1, -17.435283660888672)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Spell"] = "Reave",
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Key press events
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = true
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = true
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = false
+        keyBindCounter = 0
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = false
+        keyBind2Counter = 0
+    end
+end)
+
+-- Heartbeat connection to execute actions
+runService.Heartbeat:Connect(function()
+    if keyBindPressed then
+        keyBindCounter = keyBindCounter + 9
+        if keyBindCounter % 2 == 0 then
+            fireKeyBind()
+        end
+    end
+
+    if keyBind2Pressed then
+        keyBind2Counter = keyBind2Counter + 9
+        if keyBind2Counter % 2 == 0 then
+            fireKeyBind2()
+        end
+    end
+end)
+
+--------------
+
+local player = game.Players.LocalPlayer
+local userInputService = game:GetService("UserInputService")
+local mouse = player:GetMouse()
+local runService = game:GetService("RunService")
+
+-- Settings
+local bind = Enum.KeyCode.RightBracket -- has to be lowercase
+local bind2 = Enum.KeyCode.LeftBracket
+
+-- Flags for keys
+local keyBindPressed = false
+local keyBind2Pressed = false
+
+-- Counter variables
+local keyBindCounter = 0
+local keyBind2Counter = 0
+
+-- Function to handle firing with CFrame at mouse position
+local function fireKeyBind()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(mouse.Hit.p)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Index"] = 3,
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Function to handle firing with specific CFrame
+local function fireKeyBind2()
+    local targetPart = workspace:WaitForChild("MAIN_MAP"):WaitForChild("Part")
+    local targetCFrame = CFrame.new(-414.4881591796875, 1, -17.435283660888672)
+
+    local args = {
+        [1] = {
+            ["Target"] = targetPart,
+            ["Spell"] = "Reave",
+            ["Position"] = targetCFrame.Position,
+            ["CFrame"] = targetCFrame,
+        }
+    }
+
+    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("AbilityService"):WaitForChild("RF"):WaitForChild("Cast"):InvokeServer(unpack(args))
+end
+
+-- Key press events
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = true
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = true
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == bind then
+        keyBindPressed = false
+        keyBindCounter = 0
+    elseif input.KeyCode == bind2 then
+        keyBind2Pressed = false
+        keyBind2Counter = 0
+    end
+end)
+
+-- Heartbeat connection to execute actions
+runService.Heartbeat:Connect(function()
+    if keyBindPressed then
+        keyBindCounter = keyBindCounter + 9
+        if keyBindCounter % 2 == 0 then
+            fireKeyBind()
+        end
+    end
+
+    if keyBind2Pressed then
+        keyBind2Counter = keyBind2Counter + 9
+        if keyBind2Counter % 2 == 0 then
+            fireKeyBind2()
+        end
+    end
+end)

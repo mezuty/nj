@@ -1,1 +1,376 @@
-eeeh
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- Constants
+local TARGET_DISTANCE_THRESHOLD = 10 -- Studs threshold for "near" a player
+local FLIGHT_ABILITY = "Flight"
+
+-- Remote
+local EventHandler = ReplicatedStorage:WaitForChild("Libraries"):WaitForChild("EventHandler"):WaitForChild("Events"):WaitForChild("Ability")
+
+-- State
+local abilityKeys = {}
+local currentAbility = nil
+local mouseHeld = false
+local keyHeld = {}
+local blockedTargets = {}
+local immuneTargets = {}
+local uiWatchersSetup = false
+
+-- AOE abilities that don't require a target
+local aoeAbilities = {
+	["Repulse"] = true,
+	["Area Slam"] = true,
+	["Runes"] = true,
+	["Time Stop"] = true,
+	["Lightning Strike"] = true,
+	["Mass Strangle"] = true,
+	["Teleportation"] = true,
+	["Appa"] = true,
+	["Protego"] = true,
+	["Incendio"] = true,
+	["Shield"] = true,
+	["Hex Bomb"] = true,
+	["Psychic Vortex"] = true,
+	["Psychic Scream"] = true,
+	["Mass Pain"] = true,
+	["Area Blinding"] = true,
+	["Light Barrage"] = true,
+	["Telekinetic Shockwave"] = true,
+	["Telekinetic Stomp"] = true,
+	["Mass Ignite"] = true
+}
+
+-- Position-based AOE abilities (use mouse position if near player, otherwise mouse position)
+local positionBasedAOE = {
+	["Appa"] = true,
+	["Teleportation"] = true
+}
+
+---------------------------------------------------------------------
+-- Utility Functions
+---------------------------------------------------------------------
+local function getCharacterRootPart(character)
+	return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+local function isValidTarget(player)
+	return player and player ~= LocalPlayer and getCharacterRootPart(player.Character)
+end
+
+---------------------------------------------------------------------
+-- Refresh ability keys from both Icons and Icons2
+---------------------------------------------------------------------
+local function refreshAbilityKeys(Icons, Icons2)
+	abilityKeys = {}
+	
+	local function processIcon(icon)
+		local keycode = icon:FindFirstChild("Keycode")
+		if not keycode then return end
+		
+		local textLabel = keycode:FindFirstChild("TextLabel")
+		if not textLabel then return end
+		
+		local key = string.upper(textLabel.Text)
+		if key and key ~= "" then
+			abilityKeys[key] = icon.Name
+		end
+	end
+	
+	-- Process existing icons
+	for _, icon in pairs(Icons:GetChildren()) do
+		processIcon(icon)
+	end
+	for _, icon in pairs(Icons2:GetChildren()) do
+		processIcon(icon)
+	end
+end
+
+---------------------------------------------------------------------
+-- Setup watchers on Icons and Icons2 UI
+---------------------------------------------------------------------
+local function setupIconWatchers(icon)
+	if not icon:FindFirstChild("Keycode") then return end
+	
+	local textLabel = icon.Keycode:FindFirstChild("TextLabel")
+	if not textLabel then return end
+	
+	textLabel:GetPropertyChangedSignal("Text"):Connect(function()
+		-- Refresh keys when text changes
+		local GameInterface = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("GameInterface")
+		local Icons = GameInterface:FindFirstChild("Icons")
+		local Icons2 = GameInterface:FindFirstChild("Icons2")
+		if Icons and Icons2 then
+			refreshAbilityKeys(Icons, Icons2)
+		end
+	end)
+end
+
+local function setupUIWatchers()
+	if uiWatchersSetup then return end
+	
+	local success, GameInterface = pcall(function()
+		return LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("GameInterface", 5)
+	end)
+	
+	if not success or not GameInterface then
+		warn("Failed to find GameInterface")
+		return
+	end
+	
+	local Icons = GameInterface:FindFirstChild("Icons")
+	local Icons2 = GameInterface:FindFirstChild("Icons2")
+	
+	if not Icons or not Icons2 then
+		warn("Failed to find Icons or Icons2")
+		return
+	end
+	
+	-- Initial refresh
+	refreshAbilityKeys(Icons, Icons2)
+	
+	-- Watch for added/removed icons
+	local function onChildAdded(child)
+		setupIconWatchers(child)
+		refreshAbilityKeys(Icons, Icons2)
+	end
+	
+	local function onChildRemoved()
+		refreshAbilityKeys(Icons, Icons2)
+	end
+	
+	Icons.ChildAdded:Connect(onChildAdded)
+	Icons.ChildRemoved:Connect(onChildRemoved)
+	Icons2.ChildAdded:Connect(onChildAdded)
+	Icons2.ChildRemoved:Connect(onChildRemoved)
+	
+	-- Setup watchers for existing icons
+	for _, icon in pairs(Icons:GetChildren()) do
+		setupIconWatchers(icon)
+	end
+	for _, icon in pairs(Icons2:GetChildren()) do
+		setupIconWatchers(icon)
+	end
+	
+	uiWatchersSetup = true
+end
+
+---------------------------------------------------------------------
+-- Get nearest player to mouse
+---------------------------------------------------------------------
+local function getNearestPlayer()
+	if not Mouse.Hit then return nil end
+	
+	local mousePos = Mouse.Hit.Position
+	local nearest, dist = nil, math.huge
+	
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if isValidTarget(plr) then
+			local rootPart = plr.Character.HumanoidRootPart
+			local d = (mousePos - rootPart.Position).Magnitude
+			
+			if d < dist then
+				nearest, dist = plr, d
+			end
+		end
+	end
+	
+	return nearest, dist
+end
+
+---------------------------------------------------------------------
+-- Watch for ANTIMovement + Immune (IntValue)
+---------------------------------------------------------------------
+local function watchTarget(plr)
+	if not plr then return end
+	
+	local function hook(char)
+		if not char then return end
+		
+		-- Check existing objects
+		if char:FindFirstChild("ANTIMovement") then
+			blockedTargets[plr.Name] = true
+		end
+		
+		local immuneObj = char:FindFirstChild("Immune")
+		if immuneObj and immuneObj:IsA("IntValue") and immuneObj.Value > 0 then
+			immuneTargets[plr.Name] = true
+		end
+		
+		-- Watch for additions
+		char.ChildAdded:Connect(function(child)
+			if child.Name == "ANTIMovement" then
+				blockedTargets[plr.Name] = true
+			elseif child.Name == "Immune" and child:IsA("IntValue") then
+				if child.Value > 0 then
+					immuneTargets[plr.Name] = true
+				end
+				child:GetPropertyChangedSignal("Value"):Connect(function()
+					if child.Value > 0 then
+						immuneTargets[plr.Name] = true
+					else
+						immuneTargets[plr.Name] = nil
+					end
+				end)
+			end
+		end)
+		
+		-- Watch for removals
+		char.ChildRemoved:Connect(function(child)
+			if child.Name == "ANTIMovement" then
+				blockedTargets[plr.Name] = nil
+			elseif child.Name == "Immune" then
+				immuneTargets[plr.Name] = nil
+			end
+		end)
+	end
+	
+	if plr.Character then
+		hook(plr.Character)
+	end
+	
+	plr.CharacterAdded:Connect(hook)
+	plr.CharacterRemoving:Connect(function()
+		-- Clean up when player leaves or respawns
+		blockedTargets[plr.Name] = nil
+		immuneTargets[plr.Name] = nil
+	end)
+end
+
+-- Initialize target watching
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr ~= LocalPlayer then
+		watchTarget(plr)
+	end
+end
+Players.PlayerAdded:Connect(watchTarget)
+Players.PlayerRemoving:Connect(function(plr)
+	-- Clean up when player leaves
+	blockedTargets[plr.Name] = nil
+	immuneTargets[plr.Name] = nil
+end)
+
+---------------------------------------------------------------------
+-- Fire ability (optimized spam)
+---------------------------------------------------------------------
+local function fireAbility(ability)
+	if not ability or ability == FLIGHT_ABILITY then return end
+	
+	local char = LocalPlayer.Character
+	local rootPart = getCharacterRootPart(char)
+	if not rootPart then return end
+	
+	if aoeAbilities[ability] then
+		-- AOE ability
+		if positionBasedAOE[ability] then
+			-- Position-based AOE (Appa/Teleportation)
+			if not Mouse.Hit then return end
+			
+			local nearestPlayer, distance = getNearestPlayer()
+			local targetPos
+			
+			if nearestPlayer and distance < TARGET_DISTANCE_THRESHOLD then
+				targetPos = nearestPlayer.Character.HumanoidRootPart.Position
+			else
+				targetPos = Mouse.Hit.Position
+			end
+			
+			EventHandler:FireServer(ability, Vector3.new(targetPos.X, targetPos.Y, targetPos.Z))
+		else
+			-- Standard AOE at player position
+			EventHandler:FireServer(ability, rootPart.Position)
+		end
+	else
+		-- Targeted ability
+		local target = getNearestPlayer()
+		if not isValidTarget(target) then return end
+		
+		local targetName = target.Name
+		
+		-- Block conditions
+		if ability == "Pain Infliction" and blockedTargets[targetName] then return end
+		if ability == "Telekinesis" and immuneTargets[targetName] then return end
+		
+		local targetRootPart = target.Character.HumanoidRootPart
+		
+		-- Fire targeted ability
+		EventHandler:FireServer(ability, targetRootPart.Position, target.Character)
+		
+		-- Fire Telekinesis click instantly in the same frame
+		if ability == "Telekinesis" and not immuneTargets[targetName] then
+			EventHandler:FireServer("Telekinesis", "Click")
+		end
+	end
+end
+
+---------------------------------------------------------------------
+-- Input handling
+---------------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		local key = string.upper(input.KeyCode.Name)
+		local ability = abilityKeys[key]
+		
+		if ability then
+			currentAbility = ability
+			keyHeld[key] = true
+			
+			-- Fire AOE abilities immediately on key press
+			if aoeAbilities[ability] then
+				fireAbility(ability)
+			end
+		end
+	elseif input.UserInputType == Enum.UserInputType.MouseButton1 and currentAbility then
+		mouseHeld = true
+		fireAbility(currentAbility)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		mouseHeld = false
+	elseif input.UserInputType == Enum.UserInputType.Keyboard then
+		local key = string.upper(input.KeyCode.Name)
+		keyHeld[key] = false
+		
+		-- Clear current ability if the key was released
+		if abilityKeys[key] == currentAbility then
+			currentAbility = nil
+		end
+	end
+end)
+
+---------------------------------------------------------------------
+-- Ultra-fast spam loop (fires *every frame* while mouse or key is held)
+---------------------------------------------------------------------
+RunService.Heartbeat:Connect(function()
+	-- Fire while mouse is held
+	if mouseHeld and currentAbility then
+		fireAbility(currentAbility)
+	end
+	
+	-- Fire held AOE ability keys
+	for key, ability in pairs(abilityKeys) do
+		if keyHeld[key] and aoeAbilities[ability] then
+			fireAbility(ability)
+		end
+	end
+end)
+
+---------------------------------------------------------------------
+-- Re-hook UI after respawn
+---------------------------------------------------------------------
+LocalPlayer.CharacterAdded:Connect(function()
+	uiWatchersSetup = false
+	task.defer(setupUIWatchers)
+end)
+
+-- Initial setup
+task.defer(setupUIWatchers)

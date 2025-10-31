@@ -170,13 +170,13 @@ local function getNearestPlayer()
 	local nearest, dist = nil, math.huge
 	
 	for _, plr in ipairs(Players:GetPlayers()) do
-		if not isValidTarget(plr) then continue end
-		
-		local rootPart = plr.Character.HumanoidRootPart
-		local d = (mousePos - rootPart.Position).Magnitude
-		
-		if d < dist then
-			nearest, dist = plr, d
+		if isValidTarget(plr) then
+			local rootPart = plr.Character.HumanoidRootPart
+			local d = (mousePos - rootPart.Position).Magnitude
+			
+			if d < dist then
+				nearest, dist = plr, d
+			end
 		end
 	end
 	

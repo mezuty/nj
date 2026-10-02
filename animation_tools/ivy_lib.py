@@ -171,6 +171,8 @@ class ArmSolver:
             ax = Vector((qq.x, qq.y, qq.z)) * (2.0 if qq.w >= 0 else -2.0)
             res += [ax.x * rw, ax.y * rw, ax.z * rw]
         res += list((np.array(q) - np.array(prior)) * np.array(pw))
+        if getattr(self, 'cont', None) is not None:          # temporal continuity: stay near the previous frame's solution (kills IK twist-jumps)
+            res += list((np.array(q) - np.array(self.cont[0])) * np.array(self.cont[1]))
         return np.array(res)
 
     def solve(self, Mp, tpos, prior, pw, q0=None, trot=None, rw=0.3, iters=60):

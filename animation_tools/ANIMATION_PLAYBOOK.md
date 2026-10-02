@@ -1,7 +1,10 @@
-# Animation Playbook — how these idle loops get made
+# Animation Playbook — how these animations get made (idle loops AND actions)
 
-Paste this file (or the "Prompt to give Claude" section) at the start of a new session and Claude can
-reproduce the whole workflow: same quality, same checks, same delivery format.
+The method is the same for **every** animation type: loops (idles, walks, hovers) and one-shot actions
+(punches, kicks, spells, dashes, jumps, hit reactions, grabs, emotes…). Sections 1–8 are the shared core
+(written around idle loops); **section 9 adds everything specific to actions**.
+Paste this file (or a prompt below) at the start of a new session and Claude can reproduce the whole workflow:
+same quality, same checks, same delivery format.
 
 ---
 
@@ -14,6 +17,14 @@ reproduce the whole workflow: same quality, same checks, same delivery format.
 > Props/capes/weapons in the rig: **[none / list]**.
 > Deliver ONE self-contained `.py` I can paste into Blender's Scripting tab, committed to the repo and sent as a file.
 > Before sending, run every check in the playbook and tell me the numbers. Don't reuse the vocabulary of earlier characters.
+
+**Prompt for an ACTION (punch, spell, dash, hit reaction…):**
+
+> Use `animation_tools/ANIMATION_PLAYBOOK.md` (core + section 9) and the tools in `animation_tools/`.
+> Make a **[ACTION]** for **[CHARACTER]**. Timing from the game: **windup [x] s, strike/cast [x] s, channel [x] s (if sustained),
+> recovery [x] s**, **damage/impact at [x] s**. Target: **[victim distance + height / none]**. **[Full-body | upper-body only (cast-while-moving)]**.
+> Root movement allowed: **[none / lunge / dash distance]**. Ready/idle pose it must start and end on: **[describe or "the [X] idle's frame 0"]**.
+> Marker names the engine needs: **[HIT, ...]**. Deliver one `.py` per variant, verify every action gate, report the numbers.
 
 ---
 
@@ -61,7 +72,7 @@ cd animation_tools && ../venv/bin/python run_body8.py && ../venv/bin/python buil
 Rendering uses Cycles on CPU (no GPU/EGL in the container); 10–12 samples is enough for pose review.
 Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 
-## 4. Quality gates (all must pass before delivering)
+## 4. Quality gates for LOOPS (all must pass before delivering; actions: see §9)
 
 | Gate | How | Target |
 |---|---|---|
@@ -117,10 +128,83 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 * Always verify **contact poses with real mesh measurements** — eyeballing a gap on blocky limbs is unreliable (Batman clasp).
 * Measure **clipping** when a pose pulls limbs toward the body; route transitions around the torso (elbows arc out).
 * Keep **every pose reachable on this rig** — test statically first.
+* **A check that fails is information, not an obstacle**: every demo-punch failure (start-velocity metric, IK twist pops, fist-offset error, overshoot past reach) pointed at a real
+  cause. Fix the cause (or fix a *wrong metric* and say so), never loosen a threshold just to pass.
 * Quote real numbers in the delivery message (hover height, gap, jerk, deviation) and be upfront about assumptions
   (no props, cape/glow are separate effects) and limits (checked headlessly with renders, not real-time playback).
 
-## 8. File map (`animation_tools/`, flat so imports work)
+## 9. ACTIONS (one-shot animations) — what changes vs loops
+
+Everything in sections 2–5 still applies (motion as math → solvers for physical contact → bake → measure the real keyed action).
+What changes:
+
+| | Loop (idle/walk/hover) | One-shot action (punch/spell/dash/hit-react) |
+|---|---|---|
+| Timeline | seamless cycle, frame N == frame 0 | **lifecycle**: anticipation → action/impact → follow-through → recovery |
+| Length | chosen from the beat | **derived from game timing**: `frames = FPS × (cast + channel + recovery)` — never guess |
+| Seam | `CYCLES` modifier on every F-curve | **no** modifier. First & last pose identical (the engine's idle/ready pose), **zero velocity at both ends** so it blends |
+| Sync | none | **timeline markers** at gameplay moments (`HIT`, `WINDUP_END`, `CAST`, `RELEASE`…) — `build_action.py --markers HIT=16` |
+| Keys | even spacing | **dense where fast** (`--fast 8-24` = every frame in the strike), sparse where slow (`--step 2`) |
+| Contact | feet planted | feet planted **with ball-of-foot pivots / steps**, fists/hands **aimed at a world target** |
+| Export | usually full-body | **full-body *or* upper-body-only** (cast/shoot while walking) → `--bones upper` strips TORSO/legs/root |
+
+**Lifecycle rules** (from the original brief):
+* *Instant attack:* `Anticipation → Impact/Apex → Follow-through → Recovery (back to ready)`.
+* *Channeled/sustained:* `Windup → Activation apex → **Sustained hold** → Wind-down`. The pose must be held for the **entire** gameplay duration with
+  a living hold (breathing / strain / recoil on a 10–12 f cadence); only recover after it ends. Frame count must cover the whole effect.
+* Anticipation is a *real* wind-back (hips/chest rotate away, weight shifts back); follow-through overshoots slightly then settles.
+
+**Kinetic chain (what makes a punch/kick feel powerful):** motion starts in the core and ripples out with 1–3 frame offsets:
+`hips (peak velocity first) → chest → shoulder → elbow → wrist/fist (last)`. Verify the order with peak-velocity frames.
+Peak fist speed should land **1–3 frames before impact** and the fist should **stop at the victim** (no pass-through).
+
+**Aimed contact via IK (not hand-posed):** define the victim contact point in world space; each frame solve the arm (`ArmSolver`) so the fist path
+runs guard → target in the *current* chest frame. Three traps found while building the demo — all caught by the checks:
+1. **Calibrate the fist offset on the real mesh.** The hand is a 1-stud plate, so "wrist → front face" is ~0.58, not a guess.
+   `run_action_demo.py` solves once, measures the mesh at the hit frame, then re-solves with the measured offset.
+2. **IK is redundant (8 joints chase a 3-D point)**, so twist joints drift and *jump* between equivalent solutions → visible pops.
+   Fix: temporal-continuity term (`solver.cont = (q_prev, weights)` in `ivy_lib.ArmSolver`). Jerk dropped 0.119 → 0.027.
+3. **Don't let a Hermite/ease overshoot push the fist past reach** (the victim stops it): key the arrival frame at progress 1.0 with a tiny (≤1%) compression,
+   then retract. Fully-straight arms/legs are ill-conditioned — keep targets slightly inside full reach.
+
+**Full-body vs upper-body-only:** an upper-body action must **not** key `TORSO`, legs or root (the engine's locomotion owns them): the chest carries *all*
+rotation, there is no lunge, so design a shorter standoff (demo: 2.02 vs 2.15 studs). Generate the dense data with the partial flag
+(`run_action_demo.py upper`), bake with `--bones upper`, and verify “no TORSO/leg/foot tracks”. Stripping tracks *after* solving a full-body version
+would leave the arm aimed for a body that isn’t there — always re-solve for the partial case.
+
+**Action quality gates** (`verify_action.py` runs these on the real keyed action, running the script twice):
+
+| Gate | Target |
+|---|---|
+| Single action after 2 runs; all keys BEZIER + AUTO_CLAMPED; **no** CYCLES modifier | PASS |
+| Markers present at the right frames | PASS |
+| Keyed vs dense deviation | < ~1.7° (demo: 0.1–0.25°) |
+| Jerk **outside** the strike window (windup-1 … impact+6) | < 0.03 (impact + hit-stop are intentional snaps) |
+| First vs last pose identical; velocity 0 at both ends (end-handle slope) | < 1e-3 / < 0.002 per frame |
+| Fist front face vs victim surface at HIT | within ±0.08 stud |
+| Peak fist speed frame | within 4 frames before impact |
+| Pass-through after impact | < 0.15 stud |
+| Feet: ball-of-foot drift (pivots) | < 0.03 stud |
+| Upper-body variant: no TORSO/leg/foot tracks | PASS |
+
+**Recipes for other action types** (same tools; swap the body function):
+| Type | Key ingredients |
+|---|---|
+| Kick | planted standing foot + hip lead; `LegSolver` aimed at a world target with the *kicking* foot as the end effector; counter-balance arms; chamber → extend → snap-back |
+| Spell / projectile / beam (instant) | windup (arms gather), release at the marker, recoil, recovery; hand aimed along the cast direction (`ArmSolver`), head tracks the target |
+| Channeled spell / beam | the sustained-hold rules above; frame count = full channel duration; living hold; wind-down after |
+| Dash / lunge / slide | TORSO root motion (**+Y up, −Z forward**) with the extra distance baked in; legs from `LegSolver` with moving foot targets or authored trailing legs; lean into direction |
+| Jump / flip / spin | airborne (no planting): authored legs, **TORSO quaternion** for rotations > 180° (builder keeps quaternion sign continuity); anticipation crouch, apex, landing absorption |
+| Hit reaction / knockback | impulse on TORSO + chest, head whip with lag, arms flail through momentum, settle; start from ready pose, end on ready/idle |
+| Grab / paired / execution | design around the exact standoff distance, aggressor eye-line on the victim, victim posture reflects the force; one dense file per participant, shared timing |
+| Walk / run cycle | loop rules + foot contacts: planted stance phase (`LegSolver`) and swing phase (arc), arms counter-swing, pelvis bob at 2× step frequency |
+| Emote / dance / taunt | loop or one-shot; same vocabulary rules as idles (give each character its own movement language) |
+
+**Delivery for actions:** one `.py` per variant (e.g. `*_Action.py` full-body, `*_UpperBody.py`), header listing the frame map and marker names,
+then the gate numbers in the message. The two demos in `../animations/` (`Demo_Punch_Action.py`, `Demo_Punch_UpperBody.py`) are **validated demos of the
+pipeline with assumed timing/target**, not final fight moves — give real timing/target numbers and a ready pose and they become production moves.
+
+## 10. File map (`animation_tools/`, flat so imports work)
 
 * `ivy_lib.py` — rig loading, pose setters, analytic FK, `LegSolver`, `ArmSolver`, render + contact-sheet helpers.
 * `ivy_body.py` Ivy (bubbly) · `ivy_body2.py` Ivy (seductive) · `ivy_body3.py` Harley (bubbly, rejected) ·
@@ -129,4 +213,8 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 * `run_bodyN.py` — generates dense data (+ solves legs) · `build_finalN.py` + `templateN.py` — bakes the delivered script.
 * `verifyN.py`, `seam8.py`, `rerun8.py`, `extents.py`, `gap.py`, `clipscan2.py`, `prev_act8.py` — quality gates & previews.
 * `t_sweep.py`, `t_mir.py`, `gapscan.py` — pose exploration / search for contact poses. `rig_dump.py` — rig inspection.
+* **Actions:** `action_demo_punch.py` (timing spec, keys, target, guard poses) + `run_action_demo.py full|upper` (solves + fist calibration) →
+  `build_action.py` (generic baker: `--step --fast --markers --bones all|upper --cyclic`) + `template_action.py` →
+  `verify_action.py` (action gates) · `punch_reach.py` (reach/chain-order report) · `prev_action.py` (renders with a target marker).
+  `PUNCH_TY` env var sets the victim distance (used by the generator *and* the verifier).
 * Delivered scripts live in `../animations/`. Working data goes to `work/` (`ANIM_WORKDIR`); put `rig.blend` there.

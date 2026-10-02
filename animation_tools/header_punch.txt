@@ -1,0 +1,12 @@
+# =============================================================================
+#  DEMO: STRAIGHT RIGHT PUNCH (one-shot action, NOT a loop)            Roblox R15 / MrXen0 rig
+# -----------------------------------------------------------------------------
+#  Paste into Blender's Scripting tab and press Run Script (Alt+P).
+#
+#  TIMING (60 fps, from the spec):   windup 0.20 s | strike 0.067 s | follow-through 0.15 s | recovery 0.50 s
+#    frame 0 = ready stance   frame 12 = windup peak (marker WINDUP_END)   frame 16 = IMPACT (marker HIT)
+#    frame 25 = end of follow-through   frame 55 = back on the ready pose (first and last pose are identical,
+#    velocity 0 at both ends so the engine can blend from/to idle)
+#  Kinetic chain: hips -> chest -> shoulder -> elbow -> wrist; fist lands on the target at the HIT frame.
+#  Not a loop: no cycle modifier.
+# =============================================================================

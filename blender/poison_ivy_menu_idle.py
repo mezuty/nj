@@ -235,65 +235,139 @@ def find_left_hip(arm):
     return None
 
 
+def is_descendant(child, ancestor):
+    p = child.parent
+    while p:
+        if p == ancestor:
+            return True
+        p = p.parent
+    return False
+
+
+def set_rot(pb, deg):
+    m = rot4(deg)
+    if pb.rotation_mode == 'QUATERNION':
+        pb.rotation_quaternion = m.to_quaternion()
+    else:
+        if pb.rotation_mode == 'AXIS_ANGLE':
+            pb.rotation_mode = 'XYZ'
+        pb.rotation_euler = m.to_euler(pb.rotation_mode)
+
+
 def solve_hand_on_hip(arm, bones):
-    """Search arm angles so the left wrist lands on the hip, elbow out and back."""
-    pbu, pbl, pbh = (arm.pose.bones[bones[k]] for k in ("l_upper", "l_lower", "l_hand"))
+    """Find arm angles that plant the left hand on the side of the hip, elbow out.
+
+    Uses real joint positions (not bone lengths, which can be arbitrary on Roblox
+    rigs) and measures the deform bones the mesh actually follows when present.
+    Stage 1: fast grid search with FK math. Stage 2: refine against the rig's
+    real evaluated pose, so constraints/odd parenting can't throw it off.
+    """
+    pb = arm.pose.bones
+    pbu, pbl, pbh = (pb[bones[k]] for k in ("l_upper", "l_lower", "l_hand"))
     hip = find_left_hip(arm)
-    if hip is None or pbl.parent != pbu or pbh.parent != pbl:
-        print("WARNING: couldn't solve hand-on-hip (hip bone or arm chain not found); "
-              "using fallback angles.")
+    if hip is None:
+        print("WARNING: no left hip/upper-leg bone found; using fallback hand-on-hip angles.")
         return None
 
-    bpy.context.view_layer.update()
+    m_sh = pb.get("LeftUpperArm") or pbu      # what the mesh follows
+    m_el = pb.get("LeftLowerArm") or pbl
+    m_wr = pb.get("LeftHand") or pbh
     W = arm.matrix_world
-    s = pbu.bone.length
+
+    bpy.context.view_layer.update()
+    sh = W @ m_sh.head
+    s = (W @ m_el.head - sh).length           # real upper-arm length
+    if s < 1e-6:
+        print("WARNING: couldn't measure the arm; using fallback hand-on-hip angles.")
+        return None
     hip_w = W @ hip.head
-    out = 1.0 if (W @ pbu.head).x > (W @ arm.pose.bones[bones["chest"]].head).x else -1.0
+    out = 1.0 if sh.x > (W @ pb[bones["chest"]].head).x else -1.0
     OUT, UP, FWD = Vector((out, 0, 0)), Vector((0, 0, 1)), Vector((0, 1, 0))
     target = hip_w + OUT * (HIP_OUT * s) + UP * (HIP_UP * s) - FWD * (HIP_BACK * s)
+    want = (-UP * 0.7 + FWD * 0.45 - OUT * 0.25).normalized()   # fingers down/forward over hip
 
-    if pbu.parent:
-        base_u = W @ pbu.parent.matrix @ pbu.parent.bone.matrix_local.inverted() @ pbu.bone.matrix_local
+    # Elbow flares out to the side, a little back and up - not pointing behind her.
+    elbow_target = target + OUT * (0.75 * s) + UP * (0.15 * s) - FWD * (0.25 * s)
+
+    def arm_score(elbow, wrist):
+        side = (wrist - hip_w).dot(OUT) / s
+        front = (wrist - hip_w).dot(FWD) / s
+        return ((wrist - target).length / s
+                + 0.7 * (elbow - elbow_target).length / s
+                + 2.0 * max(0.0, 0.45 - side)            # hand outside the torso, never in front of it
+                + 2.0 * max(0.0, front - 0.25))
+
+    def reg(p):
+        return 0.0002 * (abs(p[0]) + abs(p[1]) + abs(p[2]) + abs(p[3] + 95)) \
+            + 0.0005 * (abs(p[4]) + abs(p[5]))
+
+    # Stage 1: grid search with FK matrix math (valid when the chain is plain FK).
+    seeds = []
+    if is_descendant(pbl, pbu) and is_descendant(pbh, pbl):
+        fk_s = (pbl.head - pbu.head).length or s
+        k = s / fk_s
+        if pbu.parent:
+            base_u = W @ pbu.parent.matrix @ pbu.parent.bone.matrix_local.inverted() @ pbu.bone.matrix_local
+        else:
+            base_u = W @ pbu.bone.matrix_local
+        off_l = pbu.bone.matrix_local.inverted() @ pbl.bone.matrix_local
+        off_h = pbl.bone.matrix_local.inverted() @ pbh.bone.matrix_local
+        sh_fk = base_u.translation
+        grid = []
+        for ux in range(-10, 35, 5):
+            for uy in range(-90, 91, 15):
+                for uz in [z * sg for z in range(20, 65, 5) for sg in (1, -1)]:
+                    ml0 = base_u @ rot4((ux, uy, uz)) @ off_l
+                    for lx in range(-60, -145, -10):
+                        ml = ml0 @ rot4((lx, 0, 0))
+                        # rescale FK positions to the real arm about the shoulder
+                        elbow = sh + (ml0.translation - sh_fk) * k
+                        wrist = sh + ((ml @ off_h).translation - sh_fk) * k
+                        p = (ux, uy, uz, lx, 0, 0)
+                        grid.append((arm_score(elbow, wrist) + reg(p), p))
+        grid.sort(key=lambda g: g[0])
+        seeds = [g[1] for g in grid[:3]]
     else:
-        base_u = W @ pbu.bone.matrix_local
-    off_l = pbu.bone.matrix_local.inverted() @ pbl.bone.matrix_local
-    off_h = pbl.bone.matrix_local.inverted() @ pbh.bone.matrix_local
+        print("NOTE: arm chain isn't plain FK parenting; solving on the evaluated rig only.")
+    seeds += [(10, uy, 40 * sg, -100, 0, 0) for uy in (-90, 0, 90) for sg in (1, -1)]
+
+    # Stage 2: coordinate descent on the real evaluated rig (includes the wrist).
+    def evaluate(p):
+        set_rot(pbu, p[0:3])
+        set_rot(pbl, (p[3], 0, 0))
+        set_rot(pbh, (p[4], 0, p[5]))
+        bpy.context.view_layer.update()
+        elbow, wrist, tip = W @ m_el.head, W @ m_wr.head, W @ m_wr.tail
+        d = tip - wrist
+        ang = d.normalized().angle(want) if d.length > 1e-9 else math.pi
+        return arm_score(elbow, wrist) + 0.3 * ang + reg(p), wrist
 
     best = None
-    for ux in range(-10, 35, 5):
-        for uy in range(-90, 91, 15):
-            for uz in [z * sg for z in range(20, 65, 5) for sg in (1, -1)]:
-                ml0 = base_u @ rot4((ux, uy, uz)) @ off_l
-                elbow = ml0.translation
-                for lx in range(-60, -145, -10):
-                    ml = ml0 @ rot4((lx, 0, 0))
-                    wrist = (ml @ off_h).translation
-                    rel = elbow - wrist
-                    score = ((wrist - target).length / s
-                             + max(0.0, 0.25 - rel.dot(OUT) / s)    # elbow flared out to the side
-                             + max(0.0, rel.dot(FWD) / s)           # elbow not in front of the hand
-                             + 0.0002 * (abs(ux) + abs(uy) + abs(uz) + abs(lx + 95)))
-                    if best is None or score < best[0]:
-                        best = (score, (ux, uy, uz), (lx, 0, 0), ml)
+    for seed in seeds:
+        p = list(seed)
+        cur, _ = evaluate(p)
+        for step in (20, 10, 5, 2):
+            improved, guard = True, 0
+            while improved and guard < 40:
+                improved, guard = False, guard + 1
+                for i in range(6):
+                    for dv in (step, -step):
+                        q = p.copy()
+                        q[i] += dv
+                        sc, _ = evaluate(q)
+                        if sc < cur - 1e-6:
+                            p, cur, improved = q, sc, True
+        if best is None or cur < best[0]:
+            best = (cur, p)
 
-    # Wrist: fingers point down and forward, wrapping slightly over the front of the hip.
-    _, upper, lower, ml = best
-    mh0 = ml @ off_h
-    wrist = mh0.translation
-    want = (-UP * 0.7 + FWD * 0.45 - OUT * 0.25).normalized()
-    hbest = None
-    for hx in range(-70, 75, 5):
-        for hz in range(-70, 75, 5):
-            mh = mh0 @ rot4((hx, 0, hz))
-            d = ((mh @ Vector((0, pbh.bone.length, 0))) - wrist).normalized()
-            score = d.angle(want) + 0.001 * (abs(hx) + abs(hz))
-            if hbest is None or score < hbest[0]:
-                hbest = (score, (hx, 0, hz))
-
+    p = best[1]
+    _, wrist = evaluate(p)
     err = (wrist - target).length / s
-    print(f"Hand-on-hip solved: upper {upper}, lower {lower}, hand {hbest[1]} "
-          f"(wrist off target by {err:.2f} arm-lengths)")
-    return {"l_upper": upper, "l_lower": lower, "l_hand": hbest[1]}
+    upper, lower, hand = tuple(p[0:3]), (p[3], 0, 0), (p[4], 0, p[5])
+    print(f"Hand-on-hip solved: upper {upper}, lower {lower}, hand {hand} | arm length {s:.2f}, "
+          f"wrist {tuple(round(v, 2) for v in wrist)}, hip {tuple(round(v, 2) for v in hip_w)}, "
+          f"off target by {err:.2f} arm-lengths (measured on {m_wr.name})")
+    return {"l_upper": upper, "l_lower": lower, "l_hand": hand}
 
 
 def pose_base(arm, bones):

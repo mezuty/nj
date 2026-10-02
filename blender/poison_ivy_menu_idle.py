@@ -5,7 +5,10 @@ Pose: confident contrapposto. Weight on her right leg, hip cocked, chest
 counter-tilted into an S-curve. Right hand is the "magic" hand: held palm-up at
 lower-chest height, slowly weaving a figure-8 as if coaxing a vine to grow.
 Left hand hangs soft at her hip. Head tilted, chin slightly down, eyes drifting
-between the camera and her magic hand.
+between the camera and her magic hand. Left hand is planted sharply on her hip:
+elbow cocked out to the side, wrist bent so the hand presses onto the hip. The
+script solves that pose against the rig's real hip position, so it lands on the
+hip regardless of the rig's arm axis conventions.
 
 HOW TO USE
   Select the Roblox_R15 armature -> Scripting tab -> Open this file -> Run Script.
@@ -22,7 +25,7 @@ would make the feet slide). Set LEGS_IK = False to keep FK legs.
 
 import bpy
 import math
-from mathutils import Euler
+from mathutils import Euler, Matrix, Vector
 
 # ---------------------------------------------------------------- TIMING ---
 FPS = 60
@@ -96,23 +99,33 @@ MOTION = {
         "osc": [("x", 10.0, 4, 0), ("z", 9.0 * r, 2, 0), ("y", 7.0, 2, 90)],
         "lag": 14,
     },
-    # Anchor arm: hangs soft, slightly back and away from the hip; sways against the pelvis.
+    # Hand-on-hip arm: crisp and planted. "base" here is only a fallback - the real
+    # pose is solved against the hip in solve_hand_on_hip(). Motion is kept tiny
+    # (breathing only) so the hand doesn't slide on the hip.
     "l_upper": {
-        "base": (6.0, 0.0, 7.0 * l),
-        "osc": [("x", 2.0, 1, 180), ("z", 1.0 * l, 3, 0)],
+        "base": (10.0, 0.0, 40.0 * l),
+        "osc": [("x", 0.6, 3, 0)],
         "lag": 6,
     },
     "l_lower": {
-        "base": (-18.0, 0.0, 0.0),
-        "osc": [("x", 3.0, 3, 0), ("x", 1.5, 1, 180)],
-        "lag": 10,
+        "base": (-100.0, 0.0, 0.0),
+        "osc": [("x", 0.8, 3, 0)],
+        "lag": 9,
     },
     "l_hand": {
-        "base": (10.0, 0.0, -8.0 * l),
-        "osc": [("x", 5.0, 2, 0), ("y", 6.0, 1, 0), ("z", 3.0 * l, 3, 0)],
-        "lag": 15,
+        "base": (0.0, 0.0, -30.0 * l),
+        "osc": [("z", 0.8, 3, 0)],
+        "lag": 12,
     },
 }
+
+# Where the wrist sits relative to the left hip joint, in upper-arm lengths:
+# out to the side of the hip, up at the waist, a touch behind centre.
+HIP_OUT = 0.60
+HIP_UP = 0.35
+HIP_BACK = 0.10
+HIP_BONE_CANDIDATES = ["LeftUpperLeg", "FK_UpperLeg.L", "FK_UpperLeg_L",
+                       "IK_UpperLeg.L", "UpperLeg.L", "Thigh.L"]
 
 # Pelvis translation (local axes: x = side, y = up, -z = forward).
 # Slight drop so planted IK legs keep a soft knee; breathing bob; weight drift.
@@ -207,6 +220,96 @@ def set_ik_fk(arm):
             print(f"WARNING: PROPERTIES has no '{p}' property.")
 
 
+def rot4(deg):
+    return Euler(tuple(math.radians(d) for d in deg), 'XYZ').to_matrix().to_4x4()
+
+
+def find_left_hip(arm):
+    for name in HIP_BONE_CANDIDATES:
+        if name in arm.pose.bones:
+            return arm.pose.bones[name]
+    for pb in arm.pose.bones:
+        n = pb.name.lower()
+        if ("upperleg" in n or "thigh" in n) and (n.endswith((".l", "_l")) or "left" in n):
+            return pb
+    return None
+
+
+def solve_hand_on_hip(arm, bones):
+    """Search arm angles so the left wrist lands on the hip, elbow out and back."""
+    pbu, pbl, pbh = (arm.pose.bones[bones[k]] for k in ("l_upper", "l_lower", "l_hand"))
+    hip = find_left_hip(arm)
+    if hip is None or pbl.parent != pbu or pbh.parent != pbl:
+        print("WARNING: couldn't solve hand-on-hip (hip bone or arm chain not found); "
+              "using fallback angles.")
+        return None
+
+    bpy.context.view_layer.update()
+    W = arm.matrix_world
+    s = pbu.bone.length
+    hip_w = W @ hip.head
+    out = 1.0 if (W @ pbu.head).x > (W @ arm.pose.bones[bones["chest"]].head).x else -1.0
+    OUT, UP, FWD = Vector((out, 0, 0)), Vector((0, 0, 1)), Vector((0, 1, 0))
+    target = hip_w + OUT * (HIP_OUT * s) + UP * (HIP_UP * s) - FWD * (HIP_BACK * s)
+
+    if pbu.parent:
+        base_u = W @ pbu.parent.matrix @ pbu.parent.bone.matrix_local.inverted() @ pbu.bone.matrix_local
+    else:
+        base_u = W @ pbu.bone.matrix_local
+    off_l = pbu.bone.matrix_local.inverted() @ pbl.bone.matrix_local
+    off_h = pbl.bone.matrix_local.inverted() @ pbh.bone.matrix_local
+
+    best = None
+    for ux in range(-10, 35, 5):
+        for uy in range(-90, 91, 15):
+            for uz in [z * sg for z in range(20, 65, 5) for sg in (1, -1)]:
+                ml0 = base_u @ rot4((ux, uy, uz)) @ off_l
+                elbow = ml0.translation
+                for lx in range(-60, -145, -10):
+                    ml = ml0 @ rot4((lx, 0, 0))
+                    wrist = (ml @ off_h).translation
+                    rel = elbow - wrist
+                    score = ((wrist - target).length / s
+                             + max(0.0, 0.25 - rel.dot(OUT) / s)    # elbow flared out to the side
+                             + max(0.0, rel.dot(FWD) / s)           # elbow not in front of the hand
+                             + 0.0002 * (abs(ux) + abs(uy) + abs(uz) + abs(lx + 95)))
+                    if best is None or score < best[0]:
+                        best = (score, (ux, uy, uz), (lx, 0, 0), ml)
+
+    # Wrist: fingers point down and forward, wrapping slightly over the front of the hip.
+    _, upper, lower, ml = best
+    mh0 = ml @ off_h
+    wrist = mh0.translation
+    want = (-UP * 0.7 + FWD * 0.45 - OUT * 0.25).normalized()
+    hbest = None
+    for hx in range(-70, 75, 5):
+        for hz in range(-70, 75, 5):
+            mh = mh0 @ rot4((hx, 0, hz))
+            d = ((mh @ Vector((0, pbh.bone.length, 0))) - wrist).normalized()
+            score = d.angle(want) + 0.001 * (abs(hx) + abs(hz))
+            if hbest is None or score < hbest[0]:
+                hbest = (score, (hx, 0, hz))
+
+    err = (wrist - target).length / s
+    print(f"Hand-on-hip solved: upper {upper}, lower {lower}, hand {hbest[1]} "
+          f"(wrist off target by {err:.2f} arm-lengths)")
+    return {"l_upper": upper, "l_lower": lower, "l_hand": hbest[1]}
+
+
+def pose_base(arm, bones):
+    """Put the core in its base pose (unkeyed) so the hip solve sees the real posture."""
+    for key in ("torso", "chest", "head"):
+        if key in bones:
+            pb = arm.pose.bones[bones[key]]
+            m = rot4(MOTION[key]["base"])
+            if pb.rotation_mode == 'QUATERNION':
+                pb.rotation_quaternion = m.to_quaternion()
+            else:
+                pb.rotation_euler = m.to_euler(pb.rotation_mode if pb.rotation_mode != 'AXIS_ANGLE' else 'XYZ')
+            if key == "torso":
+                pb.location = TORSO_LOC["base"]
+
+
 def key_rotation(pb, keys):
     prev_q = None
     for frame, deg in keys:
@@ -273,6 +376,12 @@ def main():
     bones = resolve_bones(arm)
     clear_old_animation(arm)
     set_ik_fk(arm)
+
+    pose_base(arm, bones)
+    solved = solve_hand_on_hip(arm, bones)
+    if solved:
+        for key, base in solved.items():
+            MOTION[key]["base"] = base
 
     frames = key_frames()
     for key, bone_name in bones.items():

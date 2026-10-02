@@ -7,6 +7,10 @@ HOW TO USE
   3. Scripting tab -> New -> paste this file -> Run Script.
   4. Export with the Roblox animation addon as usual.
 
+  Or from a terminal (no clicking):
+    blender "MyRig.blend" --python ability1_anim.py         # opens Blender with it applied
+    blender -b "MyRig.blend" --python ability1_anim.py      # headless; applies and saves the .blend
+
 Edit the TIMING block to match the ability's real cast/channel/recovery data.
 If a bone name doesn't match your rig, the script prints the rig's bone names;
 fix the BONE_CANDIDATES table and re-run.
@@ -233,7 +237,7 @@ def smooth_curves(arm):
 def main():
     arm = find_armature()
     bpy.context.view_layer.objects.active = arm
-    if bpy.context.mode != 'POSE':
+    if not bpy.app.background and bpy.context.mode != 'POSE':
         bpy.ops.object.mode_set(mode='POSE')
 
     scene = bpy.context.scene
@@ -256,3 +260,8 @@ def main():
 
 
 main()
+
+# Headless run (blender -b file.blend --python ability1_anim.py): save the result.
+if bpy.app.background and bpy.data.filepath:
+    bpy.ops.wm.save_mainfile()
+    print(f"Saved {bpy.data.filepath}")

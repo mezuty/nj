@@ -84,6 +84,7 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 | Contact poses | `hand_gap_check.py` (e.g. knuckle crack) measures real mesh gap | 0 to −0.05 stud |
 | No clipping | `torso_clip_check.py` — oriented-box test arms vs torso | worst < ~0.07 stud (arms hanging against torso graze ~0.04 by design) |
 | Stays in frame | `frame_extents_check.py` — world bounding box over the loop | report width/height/hover |
+| Self-intersection | `selfclip.py` (all limb pairs; threshold 0.07) — standing poses should pass; seated/folded poses: report constant hidden overlaps honestly | worst < 0.07 (standing) |
 | Floor contact | `floor_check.py` — lowest foot point per frame vs floor 0.106 (toe-pointing may dip ~0.03 at the toe edge) | no sinking > 0.03 stud while grounded |
 | Clean re-run | `rerun_check.py` — run script twice on the original file | exactly 1 action, no leftovers |
 | Key rules | only animated FK bones keyed; PROPERTIES IK_FK = 0; scene 60 fps | — |
@@ -122,6 +123,7 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 | Starfire | weightless, warm, 6 s | hover 0.8 stud, trailing legs, starbolt cupped hands, joyful open-arm embrace, gentle turn |
 | Mera | fluid, regal, commanding; one 6 s tide | water-body vocabulary: slow spine swell, arms that ripple like a travelling wave (shoulder → elbow +0.9 rad → wrist +1.8 rad lag), summon → conduct the current (sweeps) → crashing-wave release → ebb, hips lean against the sweep |
 | Superman | noble, open, optimistic strength; 6 s | classic hero stance (fists on hips, chest broad, chin up), sky call (rise on toes, gaze up), coil → FLIGHT LAUNCH (right fist overhead, left arm streams back, lifts ~0.4 stud, feet together/toes pointed), soft landing, horizon glance |
+| Raven | still, inward, mystical; 6 s | floating cross-legged lotus (~0.7 stud up), head bowed, slow turn to the camera; hands float up and swirl dark energy in opposite-phase circles, then a palms-out PUSH with recoil; sinks back to stillness |
 | Wonder Woman (v2 "Amazon grace") | graceful strength, 6 s | narrow tall stagger, weight softly on one leg, S-curve (hips turned / chest counter-rotated), soft hand at waist, flowing lasso twirl (round ~0.46-stud circle, 1.5 Hz, bent elbow, wrist trails like a ribbon), wide landing arc, hair-toss, look-off |
 
 (Rejected and why: *Wonder Woman v1* — wide stance, flared elbows, fists on hips and a puffed chest read masculine; *Ivy bubbly*/*Harley bubbly* — too alike; *Catwoman crouched predator* — not feminine/feline power.)
@@ -130,6 +132,7 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 
 * **Personality = different movement vocabulary, not different numbers.** Same sway + hand-on-hip with new amplitudes reads as "reheated".
 * Power/femininity/menace come from *posture and economy*: upright + long line (Catwoman), stillness + weight (Batman), asymmetry + irregularity (Harley).
+* **Seated/lotus on 1-stud limbs:** a workable lotus is thigh flex ≈ −1.22, twist 0.20, abduct 1.05, knee flex ≈ 2.2, foot 0 (mirrored `(tx, −sg·ty, sg·tz)`), pelvis lowered ≈ −0.14 and hovered. True crossed shins always intersect, so use the V-shaped 'butterfly lotus'. Folding legs creates *constant* overlaps with the pelvis (≈0.16 stud, inside the body) — run `selfclip.py` (all limb pairs, both directions) and `pairdepth.py` (one pair over chosen frames) and read the per-frame values: a flat value across the whole loop is an intrinsic property of the pose (report it), a value that spikes at some frames is a bug to fix.
 * **Never gate motion with hard booleans** (`* (R > 0.2)`): the term jumps when the condition flips (Superman: a 0.016-stud pelvis pop → leg jerk 0.17). Use a smooth envelope (`sstep((R-0.10)/0.22)`). The dense jerk check finds these instantly.
 * **Airborne / lift-off:** raise TORSO and move foot *targets* up with it (`foot_adjust` can return `dx`: feet slide together only while off the ground). Pointed toes + forward lean pull the ankles toward the hips and fold the legs — let the feet hang lower than the pelvis rise (`dz = R - 0.12·sstep(R/0.25)`) to keep flying legs long.
 * **Lagged/wrapped timing:** when a joint is delayed (`f - lag`), always wrap with `% N` in a loop — an un-wrapped tail of an envelope leaks past frame 360 and makes a one-frame pop at the seam (found on Mera's left hand: jerk 0.113 → 0.002 after wrapping).
@@ -222,7 +225,7 @@ pipeline with assumed timing/target**, not final fight moves — give real timin
 * `ivy_lib.py` — rig loading, pose setters, analytic FK, `LegSolver`, `ArmSolver`, render + contact-sheet helpers.
 * `ivy_body.py` Ivy (bubbly) · `ivy_body2.py` Ivy (seductive) · `ivy_body3.py` Harley (bubbly, rejected) ·
   `ivy_body4.py` Harley (psycho) · `ivy_body5.py` Catwoman v1 (rejected; **also holds the shared helpers `cr`, `bump`, `sstep`**) ·
-  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire · `ivy_body9.py` Wonder Woman v1 (rejected: too masculine) · `ivy_body10.py` Wonder Woman v2 · `ivy_body11.py` Mera · `ivy_body12.py` Superman.
+  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire · `ivy_body9.py` Wonder Woman v1 (rejected: too masculine) · `ivy_body10.py` Wonder Woman v2 · `ivy_body11.py` Mera · `ivy_body12.py` Superman · `ivy_body13.py` Raven.
 * `run_bodyN.py` — generates dense data (+ solves legs) · `build_finalN.py` + `templateN.py` — bakes the delivered script.
 * `verifyN.py`, `seam8.py`, `rerun8.py`, `extents.py`, `gap.py`, `clipscan2.py`, `prev_act8.py` — quality gates & previews.
 * `t_sweep.py`, `t_mir.py`, `gapscan.py` — pose exploration / search for contact poses. `rig_dump.py` — rig inspection.

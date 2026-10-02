@@ -1,7 +1,7 @@
 import bpy, runpy, numpy as np
 bpy.ops.wm.open_mainfile(filepath=__import__("os").environ.get("ANIM_WORKDIR", "./work") + "/rig.blend")
 arm = bpy.data.objects['Roblox_R15']; bpy.context.view_layer.objects.active = arm
-runpy.run_path("../animations/Starfire_Idle.py")
+runpy.run_path("../animations/WonderWoman_Idle.py")
 names = [o.name for o in bpy.data.objects if o.type == 'MESH' and o.parent == arm]
 def allverts():
     dg = bpy.context.evaluated_depsgraph_get(); out = []

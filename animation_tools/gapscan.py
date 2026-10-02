@@ -1,7 +1,10 @@
 from ivy_lib import *
 import pickle, numpy as np, itertools
 arm = load()
-dense = pickle.load(open(f"{SCR}/dense7.pkl", 'rb'))
+try:
+    dense = pickle.load(open(f"{SCR}/dense7.pkl", "rb"))
+except Exception:
+    dense = None
 def verts(name):
     o = bpy.data.objects[name].evaluated_get(bpy.context.evaluated_depsgraph_get())
     me = o.to_mesh(); M = o.matrix_world

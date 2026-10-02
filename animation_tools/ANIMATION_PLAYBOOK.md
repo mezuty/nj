@@ -118,6 +118,7 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 | Catwoman | upright poised power, 6 s | model stance w/ pointed front toe, hip pop weight roll, long S-curve, lazy cat-swat, chin up |
 | Batman | heavy, economical, 6 s | wide planted stance, deep slow breath, knuckle crack, neck roll, cold scan, heavy exhale |
 | Starfire | weightless, warm, 6 s | hover 0.8 stud, trailing legs, starbolt cupped hands, joyful open-arm embrace, gentle turn |
+| Wonder Woman | proud, planted, heroic, 6 s | wide stance, fists on hips (elbows flared), lasso twirl at her side (measured ~0.45-stud closed circle, 2 Hz, shoulder→forearm→wrist lag), rope snap-back, regal look-off |
 
 (Rejected and why: *Ivy bubbly*/*Harley bubbly* — too alike; *Catwoman crouched predator* — not feminine/feline power.)
 
@@ -125,6 +126,9 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 
 * **Personality = different movement vocabulary, not different numbers.** Same sway + hand-on-hip with new amplitudes reads as "reheated".
 * Power/femininity/menace come from *posture and economy*: upright + long line (Catwoman), stillness + weight (Batman), asymmetry + irregularity (Harley).
+* **Circular / looping gestures (lasso twirl, stirring, waving) must be measured as paths**, not eyeballed: `twirl_path.py` (closed? planar? round? radius? even speed?) and
+  `twirl_scan.py` (grid-search amplitudes/phase lags for a round circle). Circles come from two joints 90° out of phase; a wrist rotation alone does not move the wrist point.
+  Fast cycles (period ≤ 30 f) with big swings need **3-frame keys**; finer (2 f) can be *worse* because auto-clamped handles over-correct — always measure keyed-vs-source.
 * Always verify **contact poses with real mesh measurements** — eyeballing a gap on blocky limbs is unreliable (Batman clasp).
 * Measure **clipping** when a pose pulls limbs toward the body; route transitions around the torso (elbows arc out).
 * Keep **every pose reachable on this rig** — test statically first.
@@ -209,7 +213,7 @@ pipeline with assumed timing/target**, not final fight moves — give real timin
 * `ivy_lib.py` — rig loading, pose setters, analytic FK, `LegSolver`, `ArmSolver`, render + contact-sheet helpers.
 * `ivy_body.py` Ivy (bubbly) · `ivy_body2.py` Ivy (seductive) · `ivy_body3.py` Harley (bubbly, rejected) ·
   `ivy_body4.py` Harley (psycho) · `ivy_body5.py` Catwoman v1 (rejected; **also holds the shared helpers `cr`, `bump`, `sstep`**) ·
-  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire.
+  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire · `ivy_body9.py` Wonder Woman.
 * `run_bodyN.py` — generates dense data (+ solves legs) · `build_finalN.py` + `templateN.py` — bakes the delivered script.
 * `verifyN.py`, `seam8.py`, `rerun8.py`, `extents.py`, `gap.py`, `clipscan2.py`, `prev_act8.py` — quality gates & previews.
 * `t_sweep.py`, `t_mir.py`, `gapscan.py` — pose exploration / search for contact poses. `rig_dump.py` — rig inspection.

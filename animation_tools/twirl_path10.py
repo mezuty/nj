@@ -1,6 +1,6 @@
 from ivy_lib import *
 import pickle, sys, numpy as np
-dense = pickle.load(open(f"{SCR}/dense9.pkl", 'rb')); arm = load()
+dense = pickle.load(open(f"{SCR}/dense10.pkl", 'rb')); arm = load()
 f0 = int(sys.argv[1]); P = int(sys.argv[2]) if len(sys.argv) > 2 else 30
 pts = []
 for f in range(f0, f0 + P + 1):

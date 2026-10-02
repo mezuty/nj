@@ -118,16 +118,18 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 | Catwoman | upright poised power, 6 s | model stance w/ pointed front toe, hip pop weight roll, long S-curve, lazy cat-swat, chin up |
 | Batman | heavy, economical, 6 s | wide planted stance, deep slow breath, knuckle crack, neck roll, cold scan, heavy exhale |
 | Starfire | weightless, warm, 6 s | hover 0.8 stud, trailing legs, starbolt cupped hands, joyful open-arm embrace, gentle turn |
-| Wonder Woman | proud, planted, heroic, 6 s | wide stance, fists on hips (elbows flared), lasso twirl at her side (measured ~0.45-stud closed circle, 2 Hz, shoulder→forearm→wrist lag), rope snap-back, regal look-off |
+| Wonder Woman (v2 "Amazon grace") | graceful strength, 6 s | narrow tall stagger, weight softly on one leg, S-curve (hips turned / chest counter-rotated), soft hand at waist, flowing lasso twirl (round ~0.46-stud circle, 1.5 Hz, bent elbow, wrist trails like a ribbon), wide landing arc, hair-toss, look-off |
 
-(Rejected and why: *Ivy bubbly*/*Harley bubbly* — too alike; *Catwoman crouched predator* — not feminine/feline power.)
+(Rejected and why: *Wonder Woman v1* — wide stance, flared elbows, fists on hips and a puffed chest read masculine; *Ivy bubbly*/*Harley bubbly* — too alike; *Catwoman crouched predator* — not feminine/feline power.)
 
 ## 7. Lessons learned from feedback
 
 * **Personality = different movement vocabulary, not different numbers.** Same sway + hand-on-hip with new amplitudes reads as "reheated".
 * Power/femininity/menace come from *posture and economy*: upright + long line (Catwoman), stillness + weight (Batman), asymmetry + irregularity (Harley).
+* **Gender-coding is mostly posture, not amplitude.** Wide stance, flared elbows, puffed chest, fists and hard snaps read masculine; narrower tall stagger, a hip shift with counter-rotated chest (S-curve), relaxed shoulders, rounded elbows, soft open wrists, longer limb lag and flowing arcs read graceful. Ask which feel is wanted before choosing a base stance.
 * **Circular / looping gestures (lasso twirl, stirring, waving) must be measured as paths**, not eyeballed: `twirl_path.py` (closed? planar? round? radius? even speed?) and
-  `twirl_scan.py` (grid-search amplitudes/phase lags for a round circle). Circles come from two joints 90° out of phase; a wrist rotation alone does not move the wrist point.
+  `twirl_scan.py` (grid-search amplitudes/phase lags for a round circle). Circles come from two joints 90° out of phase; a wrist rotation alone does not move the wrist point. A nearly straight arm makes a *flat* ellipse (both joints push the hand along the same line) — bend the elbow ~85° at the circle's centre for a round one.
+  Abducting the upper arm more *increases* shoulder-into-chest clipping on blocky arms; keep circles in front/low-side and measure with `torso_clip_check`/`clipscan2.py` and `head_clear.py`.
   Fast cycles (period ≤ 30 f) with big swings need **3-frame keys**; finer (2 f) can be *worse* because auto-clamped handles over-correct — always measure keyed-vs-source.
 * Always verify **contact poses with real mesh measurements** — eyeballing a gap on blocky limbs is unreliable (Batman clasp).
 * Measure **clipping** when a pose pulls limbs toward the body; route transitions around the torso (elbows arc out).
@@ -213,7 +215,7 @@ pipeline with assumed timing/target**, not final fight moves — give real timin
 * `ivy_lib.py` — rig loading, pose setters, analytic FK, `LegSolver`, `ArmSolver`, render + contact-sheet helpers.
 * `ivy_body.py` Ivy (bubbly) · `ivy_body2.py` Ivy (seductive) · `ivy_body3.py` Harley (bubbly, rejected) ·
   `ivy_body4.py` Harley (psycho) · `ivy_body5.py` Catwoman v1 (rejected; **also holds the shared helpers `cr`, `bump`, `sstep`**) ·
-  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire · `ivy_body9.py` Wonder Woman.
+  `ivy_body6.py` Catwoman · `ivy_body7.py` Batman · `ivy_body8.py` Starfire · `ivy_body9.py` Wonder Woman v1 (rejected: too masculine) · `ivy_body10.py` Wonder Woman v2.
 * `run_bodyN.py` — generates dense data (+ solves legs) · `build_finalN.py` + `templateN.py` — bakes the delivered script.
 * `verifyN.py`, `seam8.py`, `rerun8.py`, `extents.py`, `gap.py`, `clipscan2.py`, `prev_act8.py` — quality gates & previews.
 * `t_sweep.py`, `t_mir.py`, `gapscan.py` — pose exploration / search for contact poses. `rig_dump.py` — rig inspection.

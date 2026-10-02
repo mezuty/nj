@@ -18,7 +18,10 @@ H_TILT  = [(0, 0.08), (100, 0.00), (196, 0.00), (300, 0.08), (360, 0.08)]
 MED  = (-0.25, 0.15, 0.25, -0.45, 0.00, 0.20, 0.10)       # hands resting low beside her thighs
 FLT  = (-0.35, 0.20, 0.65, -1.15, 0.20, 0.55, 0.10)       # hands floated up and out, palms open
 PUSH = (-1.30, 0.00, 0.25, -0.12, 0.00, -0.65, 0.00)      # arms thrust forward, palms out
-LEG  = tuple(float(x) for x in os.environ.get('RAVEN_LEG', '-1.22,0.20,1.05,2.20,0.0').split(','))                     # lotus: thigh flex, twist, abduct, knee flex, foot
+# cross-legged ("criss-cross"): solved with legsearch.py (analytic FK).  Knees out ~±0.85, shins sweep FORWARD and INWARD to the centre line,
+# the right shin crosses in front of / above the left.  actual joint angles per leg (x, y, z of the thigh, knee flex, foot pitch)
+LEG_R = tuple(float(x) for x in os.environ.get('RAVEN_LEG_R', '-2.063,0.067,-1.400,1.797,-0.099').split(','))
+LEG_L = tuple(float(x) for x in os.environ.get('RAVEN_LEG_L', '-1.912,-0.358,1.111,1.950,0.028').split(','))
 
 def body_channels(f):
     t = w(f)
@@ -66,10 +69,10 @@ def body_channels(f):
         ch[f'FK_UpperArm.{side}'] = ((0, 0, 0), (ux, -sg * uy, sg * uz))
         ch[f'FK_LowerArm.{side}'] = ((0, 0, 0), (lx, -sg * ly, 0))
         ch[f'FK_Hand.{side}'] = ((0, 0, 0), (hx, 0, sg * hz))
-    # ---- legs: cross-legged lotus; they drift a beat behind the body like they're weightless
-    for side, sg in (('R', 1), ('L', -1)):
+    # ---- legs: criss-cross sit; they drift a beat behind the body like they're weightless
+    for side, LG in (('R', LEG_R), ('L', LEG_L)):
         lg = 0.9 if side == 'R' else 1.1
-        ch[f'FK_UpperLeg.{side}'] = ((0, 0, 0), (LEG[0] + 0.04 * math.sin(3 * t - lg), -sg * LEG[1], sg * (LEG[2] + 0.03 * math.sin(2 * t - lg))))
-        ch[f'FK_LowerLeg.{side}'] = ((0, 0, 0), (LEG[3] + 0.06 * math.sin(3 * t - lg - 0.6), 0.0, 0.0))
-        ch[f'FK_Foot.{side}'] = ((0, 0, 0), (LEG[4] + 0.06 * math.sin(3 * t - lg - 1.2), 0.0, 0.0))
+        ch[f'FK_UpperLeg.{side}'] = ((0, 0, 0), (LG[0] + 0.04 * math.sin(3 * t - lg), LG[1], LG[2] + 0.03 * math.sin(2 * t - lg)))
+        ch[f'FK_LowerLeg.{side}'] = ((0, 0, 0), (LG[3] + 0.06 * math.sin(3 * t - lg - 0.6), 0.0, 0.0))
+        ch[f'FK_Foot.{side}'] = ((0, 0, 0), (LG[4] + 0.06 * math.sin(3 * t - lg - 1.2), 0.0, 0.0))
     return ch

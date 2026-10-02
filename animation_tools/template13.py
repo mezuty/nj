@@ -15,7 +15,8 @@
 #      is smooth (frame 360 == frame 0)
 #
 #  TIMING (60 fps):   360 frames = 6.0 s - still, inward, mystical
-#    hover   : floats ~0.7 stud above the ground in a cross-legged lotus, slow bob; her legs drift a beat behind
+#    hover   : floats ~0.7 stud above the ground sitting CRISS-CROSS (knees out, shins sweep forward and inward, right shin over the left,
+#              feet stacked at the centre), slow bob; her legs drift a beat behind
 #    0-64    : meditation - head bowed, hands resting low beside her thighs, turned 3/4 away, a slow breath every 120 f
 #    64-160  : the chant begins - she rises ~0.3 stud, her head lifts, her hands float up and out, palms open, and swirl
 #              dark energy in small circles (the two hands in opposite phase; forearm / wrist lag like water)
@@ -24,7 +25,7 @@
 #
 #  This is a FULL-BODY loop (idle display) - export it as a Looped animation and do
 #  NOT apply the upper-body-only bone filter.  Hover height is animated on TORSO only.
-#  Note: the folded legs overlap the pelvis block slightly (inside the body, ~0.16 stud) - inherent to a lotus on 1-stud limbs.
+#  Note: crossed shins overlap where they meet (up to ~0.3 stud) - inherent to crossing 1-stud limbs; the legs are solved (legsearch.py) to minimise it.
 # =============================================================================
 import bpy
 

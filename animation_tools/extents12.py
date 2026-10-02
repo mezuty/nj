@@ -18,4 +18,4 @@ for f in range(0, 361, 6):
         o = bpy.data.objects[n].evaluated_get(dg); me = o.to_mesh(); M = o.matrix_world
         z = min((M @ v.co).z for v in me.vertices); o.to_mesh_clear(); feet_min = min(feet_min, z); feet_max = max(feet_max, z)
 print("EXTENTS x[%.2f, %.2f] (width %.2f)  y[%.2f, %.2f]  z[%.2f, %.2f] (height %.2f)" % (mn[0], mx[0], mx[0]-mn[0], mn[1], mx[1], mn[2], mx[2], mx[2]-mn[2]))
-print("FLOAT: lowest foot sole over loop %.2f, highest %.2f  (standing sole height = 0.21) -> hover %.2f to %.2f studs" % (feet_min, feet_max, feet_min - 0.21, feet_max - 0.21))
+print("FLOAT: lowest foot sole over loop %.2f, highest %.2f  (rest floor = 0.106) -> feet clear the ground by %.2f to %.2f studs" % (feet_min, feet_max, feet_min - 0.106, feet_max - 0.106))

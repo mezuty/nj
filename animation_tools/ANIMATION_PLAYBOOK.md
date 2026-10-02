@@ -84,12 +84,14 @@ Do **not** name a script `inspect.py` (shadows the stdlib and crashes bpy).
 | Contact poses | `hand_gap_check.py` (e.g. knuckle crack) measures real mesh gap | 0 to −0.05 stud |
 | No clipping | `torso_clip_check.py` — oriented-box test arms vs torso | worst < ~0.07 stud (arms hanging against torso graze ~0.04 by design) |
 | Stays in frame | `frame_extents_check.py` — world bounding box over the loop | report width/height/hover |
+| Floor contact | `floor_check.py` — lowest foot point per frame vs floor 0.106 (toe-pointing may dip ~0.03 at the toe edge) | no sinking > 0.03 stud while grounded |
 | Clean re-run | `rerun_check.py` — run script twice on the original file | exactly 1 action, no leftovers |
 | Key rules | only animated FK bones keyed; PROPERTIES IK_FK = 0; scene 60 fps | — |
 
 ## 5. Rig facts (MrXen0 R15 v1.2) — measured, not guessed
 
 * Scene 60 fps. Units = studs (hip height 2.0, head top ≈ 5.3 standing). Armature origin ≈ (−0.02, −0.03, 0.11).
+  **Floor (sole of the foot mesh at rest) = world z 0.106.** (An early check used 0.21 — wrong; always measure the rest pose with `floor_probe.py`/`floor_check.py` instead of assuming.)
 * **Front = +Y.** Character's **left = −X** (`.L` bones), right = +X. Camera for front view sits at +Y.
 * FK arm/leg bones: local X → world −X, local Y → down, local Z → world −Y.
   * Arm **X**: − = forward, + = back. Arm **Z**: right arm + = outward (abduct), left arm − = outward.

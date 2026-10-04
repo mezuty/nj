@@ -87,15 +87,12 @@ local ANIMS = {
 }
 
 -- Wonder Woman animation slots: replace these IDs with her custom animations when they are ready.
--- LassoLash and LassoOfTruth are ONE animation each (played once at cast start, speed 1).
+-- LassoLash, LassoOfTruth, HestiasSnare and BraceletClash are ONE animation each (played once at cast start, speed 1).
 local WW_ANIMS = {
 	LassoLash = ANIMS.Whip, -- paste the exported WonderWoman_LassoLash ID here
 	LassoOfTruth = ANIMS.Charm, -- paste the exported WonderWoman_LassoOfTruth ID here
-	SnareSpin = ANIMS.Charm,
-	SnareThrow = ANIMS.Throw,
-	SnareHeave = ANIMS.Bind,
-	ClashGuard = ANIMS.Grip,
-	ClashStrike = ANIMS.Spore,
+	HestiasSnare = ANIMS.Bind, -- paste the exported WonderWoman_HestiasSnare ID here
+	BraceletClash = ANIMS.Spore, -- paste the exported WonderWoman_BraceletClash ID here
 	GodkillerDraw = ANIMS.Grip,
 	GodkillerDash = ANIMS.Charm,
 	GodkillerSheathe = ANIMS.Grip,
@@ -128,7 +125,7 @@ local ABILITY_CONFIG = {
 	HestiasSnare = {
 		flightAllowed = true, targetKind = "Vector3", armorOnLand = true,
 		cooldown = 18, range = 60, radius = 14, castTime = 0.5,
-		spinSpeed = 14, spinRadius = 3.2, throwSpeed = 95, minThrow = 0.28, maxThrow = 0.55, throwHeight = 7,
+		spinSpeed = 14, spinRadius = 3.2, throwTime = 0.4, throwHeight = 7,
 		dropTime = 0.14, cinchTime = 0.6, cinchRadius = 3.2, spacing = 1.6, tickDamage = 5,
 		bindTime = 0.3, liftHeight = 10, liftTime = 0.28, slamTime = 0.16,
 		slamDamage = 30, knockback = 20, lift = 18, ragdoll = 1.8,
@@ -2256,7 +2253,8 @@ abilityHandlers.HestiasSnare = function(caster, data, center)
 	local root = character:FindFirstChild("HumanoidRootPart")
 	if not root then return end
 	attachHandGlows(data, character, {"RightHand"})
-	playAnim(data, character, WW_ANIMS.SnareSpin, 0.08, 1)
+	-- ONE animation covers spin -> throw -> cinch -> lift -> slam (IMPACT at frame 143) -> reel in
+	playAnim(data, character, WW_ANIMS.HestiasSnare, 0.08, 1)
 	playSound(SOUNDS.Ribbon, root.Position, 0.65)
 	playSound(SOUNDS.Whisper, center, 0.5)
 	local rope = createRope(data)
@@ -2277,12 +2275,11 @@ abilityHandlers.HestiasSnare = function(caster, data, center)
 		return nil
 	end) then return end
 
-	playAnim(data, character, WW_ANIMS.SnareThrow, 0.05, 1.2)
 	playSound(SOUNDS.Woosh, rope.handPosition(), 1)
 	local from = rope.loop.center
 	local air = center + UP * cfg.throwHeight
 	local distance = (air - from).Magnitude
-	local travel = math.clamp(distance / cfg.throwSpeed, cfg.minThrow, cfg.maxThrow)
+	local travel = cfg.throwTime -- fixed so the single animation stays in sync
 	local control = (from + air) * 0.5 + UP * (3 + distance * 0.12)
 	local phase0 = (spin * 0.5) % (2 * math.pi)
 	rope.loop.world = true
@@ -2353,7 +2350,6 @@ abilityHandlers.HestiasSnare = function(caster, data, center)
 
 	rope.slack = 1
 	rope.taut = true
-	playAnim(data, character, WW_ANIMS.SnareHeave, 0.1, 1)
 	playSound(SOUNDS.Woosh, center, 0.8)
 	local ticked = false
 	if not waitFor(data, cfg.cinchTime, function(elapsed)
@@ -2501,7 +2497,8 @@ abilityHandlers.BraceletClash = function(caster, data)
 	if not root then return end
 	if not character:GetAttribute("IsFlying") then stabilizeCharacter(character) end
 	rootCaster(data, 0, false)
-	playAnim(data, character, WW_ANIMS.ClashGuard, 0.06, 1)
+	-- ONE animation covers guard/charge -> CLASH at frame 33 (castTime 0.55) -> recoil
+	playAnim(data, character, WW_ANIMS.BraceletClash, 0.06, 1)
 	attachHandGlows(data, character, {"LeftHand", "RightHand"})
 	playSound(SOUNDS.Charge, root.Position, 0.8)
 	playSound(SOUNDS.Transform, root.Position, 0.5)
@@ -2525,7 +2522,6 @@ abilityHandlers.BraceletClash = function(caster, data)
 		return nil
 	end) then return end
 
-	playAnim(data, character, WW_ANIMS.ClashStrike, 0.03, 1.3)
 	local origin = chest()
 	local forward = flatDirection(root.Position, root.Position + root.CFrame.LookVector, root.CFrame.LookVector)
 	if core then

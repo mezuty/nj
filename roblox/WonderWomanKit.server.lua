@@ -87,21 +87,15 @@ local ANIMS = {
 }
 
 -- Wonder Woman animation slots: replace these IDs with her custom animations when they are ready.
--- LassoLash, LassoOfTruth, HestiasSnare and BraceletClash are ONE animation each (played once at cast start, speed 1).
+-- Every ability is ONE animation (played once at cast start, speed 1). Victim is the target's hit reaction.
 local WW_ANIMS = {
 	LassoLash = ANIMS.Whip, -- paste the exported WonderWoman_LassoLash ID here
 	LassoOfTruth = ANIMS.Charm, -- paste the exported WonderWoman_LassoOfTruth ID here
 	HestiasSnare = ANIMS.Bind, -- paste the exported WonderWoman_HestiasSnare ID here
 	BraceletClash = ANIMS.Spore, -- paste the exported WonderWoman_BraceletClash ID here
-	GodkillerDraw = ANIMS.Grip,
-	GodkillerDash = ANIMS.Charm,
-	GodkillerSheathe = ANIMS.Grip,
-	GodkillerFlick = ANIMS.Throw,
-	GodkillerCleave = ANIMS.Slam,
-	EagleSpread = ANIMS.Spore,
-	EagleFire = ANIMS.Throw,
-	ZeusCharge = ANIMS.Spore,
-	ZeusRelease = ANIMS.Throw,
+	Godkiller = ANIMS.Slam, -- paste the exported WonderWoman_Godkiller ID here
+	GoldenEagle = ANIMS.Spore, -- paste the exported WonderWoman_GoldenEagle ID here
+	WrathOfZeus = ANIMS.Throw, -- paste the exported WonderWoman_WrathOfZeus ID here
 	Victim = ANIMS.Pain,
 }
 
@@ -138,7 +132,7 @@ local ABILITY_CONFIG = {
 	Godkiller = {
 		flightAllowed = true, targetKind = "Vector3",
 		cooldown = 12, range = 40, minDash = 14, castTime = 0.18,
-		dashSpeed = 160, contactRadius = 4.5, missCooldownScale = 0.4, contactDamage = 6,
+		dashSpeed = 160, dashTime = 0.22, contactRadius = 4.5, missCooldownScale = 0.4, contactDamage = 6,
 		passDistance = 7, passTime = 0.12, stillTime = 0.5,
 		cutTilts = {0.55, -0.7, 1.35, -0.25}, cutGap = 0.1, cutDamage = 5, slashScale = 0.6,
 		fissureTime = 0.22, pillarScale = 2.2, pillarRing = 12, pillarDamage = 24, pillarLift = 55, ragdoll = 2.4,
@@ -147,7 +141,7 @@ local ABILITY_CONFIG = {
 		flightAllowed = true, targetKind = "Vector3", unstoppable = true,
 		cooldown = 14, range = 60, castTime = 0.4,
 		wingScale = 0.62, foldAngle = 1.25, flapAngle = 0.28,
-		hoverHeight = 3, riseTime = 0.25, descendTime = 0.25, foldTime = 0.22,
+		hoverHeight = 3, riseTime = 0.25, descendTime = 0.25, foldTime = 0.22, fireTime = 1.25,
 		feathers = 10, stagger = 0.055, speed = 130, minTravel = 0.18, maxTravel = 0.6, spread = 0.42,
 		homingRadius = 9, hitRadius = 2.8, featherDamage = 3.5, slow = 0.7, slowTime = 0.8,
 		bigDamage = 14, bigKnockback = 34, bigLift = 12, bigRagdoll = 1,
@@ -2566,7 +2560,8 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 	if not flying then stabilizeCharacter(character, aimPoint) end
 	rootCaster(data, 0, false)
 	local sword = mountSword(data, character)
-	playAnim(data, character, WW_ANIMS.GodkillerDraw, 0.05, 1.3)
+	-- ONE animation: draw -> dash -> SLASH (frame 24) -> still -> flick/cuts -> CLEAVE (85) -> pillar
+	playAnim(data, character, WW_ANIMS.Godkiller, 0.05, 1)
 	playSound(SOUNDS.Transform, root.Position, 0.6)
 	playSound(SOUNDS.Charge, root.Position, 0.45)
 	if sword then
@@ -2628,11 +2623,12 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 	authoredBurst(library:FindFirstChild("GodkillerStep"), CFrame.lookAt(startPosition, startPosition + direction), 1)
 	playSound(SOUNDS.Woosh, startPosition, 1)
 	playSound(SOUNDS.Swing, startPosition, 0.7)
-	playAnim(data, character, WW_ANIMS.GodkillerDash, 0.04, 1.3)
-	local travel = math.max(distance / cfg.dashSpeed, 0.06)
+	local travel = cfg.dashTime -- fixed so the single animation stays in sync
 	local last, lastDust = startPosition, startPosition
 	local hit
+	local dashElapsed = 0
 	if not waitFor(data, travel, function(elapsed)
+		dashElapsed = elapsed
 		local k = TweenService:GetValue(math.clamp(elapsed / travel, 0, 1), Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 		local position = grounded(startPosition + direction * (distance * k))
 		moveTo(position, facing)
@@ -2690,6 +2686,14 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 	end
 	local frozen = CFrame.lookAt(targetRoot.Position, targetRoot.Position - facing)
 	hold.place(frozen)
+	-- hold the contact until the fixed dash window ends so the animation's slash lines up
+	if not waitFor(data, math.max(0, travel - dashElapsed), function()
+		if not held() then
+			stop()
+			return true
+		end
+		return nil
+	end) or not held() then return end
 
 	local function strike(strength, damage)
 		local point = torsoPoint()
@@ -2726,7 +2730,6 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 	kickDust(passTo)
 	authoredBurst(library:FindFirstChild("GodkillerStep"), CFrame.lookAt(passTo, passTo + facing), 0.6)
 
-	playAnim(data, character, WW_ANIMS.GodkillerSheathe, 0.12, 0.8)
 	playSound(SOUNDS.Whisper, passTo, 0.6)
 	local tilts = cfg.cutTilts
 	glowPulse(target, 0.05, cfg.stillTime + #tilts * cfg.cutGap, 0.25)
@@ -2748,7 +2751,6 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 		return nil
 	end) or not held() then return end
 
-	playAnim(data, character, WW_ANIMS.GodkillerFlick, 0.03, 1.4)
 	if sword and sword.Parent then
 		authoredBurst(library:FindFirstChild("GodkillerGlint"), sword.CFrame, 1.1)
 	end
@@ -2775,7 +2777,6 @@ abilityHandlers.Godkiller = function(caster, data, aimPoint)
 
 	local towardTarget = flatDirection(root.Position, targetRoot.Position, -facing)
 	moveTo(root.Position, towardTarget)
-	playAnim(data, character, WW_ANIMS.GodkillerCleave, 0.04, 1.2)
 	local plantPoint = getGroundPosition(root.Position + towardTarget * 1.8, character)
 	local targetGround = findFloor(targetRoot.Position + UP * 2, target) or getGroundPosition(targetRoot.Position, target)
 	authoredBurst(library:FindFirstChild("GodkillerSparks"), CFrame.new(plantPoint + UP * 0.2), 0.6, true)
@@ -2848,7 +2849,8 @@ abilityHandlers.GoldenEagle = function(caster, data, aimPoint)
 	local flying = character:GetAttribute("IsFlying") == true
 	if not flying then stabilizeCharacter(character, aimPoint) end
 	rootCaster(data, 0, false)
-	playAnim(data, character, WW_ANIMS.EagleSpread, 0.08, 1)
+	-- ONE animation: wings open -> rise -> feather barrage -> BIG feather (frame 79) -> fold -> descend
+	playAnim(data, character, WW_ANIMS.GoldenEagle, 0.08, 1)
 	attachHandGlows(data, character, {"LeftHand", "RightHand"})
 	playSound(SOUNDS.Transform, root.Position, 0.7)
 	playSound(SOUNDS.Woosh, root.Position, 0.8)
@@ -2900,7 +2902,6 @@ abilityHandlers.GoldenEagle = function(caster, data, aimPoint)
 		return nil
 	end) then return end
 
-	playAnim(data, character, WW_ANIMS.EagleFire, 0.05, 1.2)
 	local params = groundParams(character)
 	local aimFrom = airPosition + UP * 1.2
 	local toAim = aimPoint - aimFrom
@@ -3041,6 +3042,11 @@ abilityHandlers.GoldenEagle = function(caster, data, aimPoint)
 		end
 	end
 
+	-- keep the fire phase a fixed length so the animation's fold lines up
+	if not waitFor(data, math.max(0, cfg.fireTime - (os.clock() - started)), function()
+		poseWings(0, cfg.flapAngle * math.sin((os.clock() - started) * 22))
+		return nil
+	end) then return end
 	playSound(SOUNDS.Woosh, root.Position, 0.6)
 	if not waitFor(data, cfg.foldTime, function(elapsed)
 		local k = TweenService:GetValue(math.clamp(elapsed / cfg.foldTime, 0, 1), Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -3122,7 +3128,8 @@ abilityHandlers.WrathOfZeus = function(caster, data, target)
 
 	if not character:GetAttribute("IsFlying") then stabilizeCharacter(character, targetRoot.Position) end
 	rootCaster(data, 0, false)
-	playAnim(data, character, WW_ANIMS.ZeusCharge, 0.08, 1)
+	-- ONE animation: storm call -> rise -> 3 bolts -> beam RELEASE (frame 101) -> torrent -> FINALE (179) -> descend
+	playAnim(data, character, WW_ANIMS.WrathOfZeus, 0.08, 1)
 	attachHandGlows(data, character, {"LeftHand", "RightHand"})
 	playSound(SOUNDS.ZapCharge, root.Position, 0.6)
 	playSound(SOUNDS.Transform, root.Position, 0.5)
@@ -3191,7 +3198,6 @@ abilityHandlers.WrathOfZeus = function(caster, data, target)
 	if not hold then return end
 	table.insert(data.holds, hold)
 	local suspended = targetRoot.Position + UP * 1.5
-	playAnim(data, character, WW_ANIMS.ZeusRelease, 0.04, 1)
 	local victimTrack = AnimationManager:PlayAnimation(target, WW_ANIMS.Victim, 0.08, 1, 1.2)
 	if victimTrack then
 		table.insert(data.animTracks, victimTrack)
